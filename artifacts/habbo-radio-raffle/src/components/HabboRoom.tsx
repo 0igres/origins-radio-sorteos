@@ -11,25 +11,44 @@ interface HabboRoomProps {
   isRadioPlaying?: boolean;
 }
 
-// DJ position is at the center stage (higher up)
-const DJ_POSITION = { x: 50, y: 35 };
+// Isometric grid parameters:
+// The room's floor is a classic Habbo isometric grid.
+// Origin at back-center V-tip of the floor (cx=50%, cy=36%).
+// Moving right in room:    cx += TILE_HALF_W, cy += TILE_HALF_H
+// Moving forward/left:     cx -= TILE_HALF_W, cy += TILE_HALF_H
+//
+// Tile position formula: cx = 50 + (gx - gy) * TILE_HALF_W
+//                        cy = 36 + (gx + gy) * TILE_HALF_H
+//
+// Tiles are ordered back-to-front so that front tiles (higher cy)
+// are rendered on top via their z-index = 100 + Math.round(cy).
 
-// Disco room floor grid - mapped to actual floor squares in the disco
-// FIX: Extended the grid to cover more positions within the room bounds.
-// Using a dense 5x6 grid (30 positions) so we can support up to 31 participants
-// (1 DJ + 30 floor tiles) without anyone going outside the room.
-// All positions stay within x: 10-90%, y: 50-88% to stay inside the floor area.
-const DISCO_FLOOR_GRID = [
-  // Row 1 (back row)
-  { x: 15, y: 50 }, { x: 27, y: 50 }, { x: 39, y: 50 }, { x: 51, y: 50 }, { x: 63, y: 50 }, { x: 75, y: 50 },
-  // Row 2
-  { x: 15, y: 59 }, { x: 27, y: 59 }, { x: 39, y: 59 }, { x: 51, y: 59 }, { x: 63, y: 59 }, { x: 75, y: 59 },
-  // Row 3
-  { x: 15, y: 68 }, { x: 27, y: 68 }, { x: 39, y: 68 }, { x: 51, y: 68 }, { x: 63, y: 68 }, { x: 75, y: 68 },
-  // Row 4
-  { x: 15, y: 77 }, { x: 27, y: 77 }, { x: 39, y: 77 }, { x: 51, y: 77 }, { x: 63, y: 77 }, { x: 75, y: 77 },
-  // Row 5 (front row)
-  { x: 15, y: 86 }, { x: 27, y: 86 }, { x: 39, y: 86 }, { x: 51, y: 86 }, { x: 63, y: 86 }, { x: 75, y: 86 },
+const DISCO_FLOOR_GRID: { x: number; y: number }[] = [
+  // Depth 2 — back row (cy ≈ 43%)
+  { x: 37.2, y: 43 }, { x: 50,   y: 43 }, { x: 62.8, y: 43 },
+
+  // Depth 3 (cy ≈ 46.5%)
+  { x: 30.8, y: 46.5 }, { x: 43.6, y: 46.5 }, { x: 56.4, y: 46.5 }, { x: 69.2, y: 46.5 },
+
+  // Depth 4 (cy ≈ 50%)
+  { x: 24.4, y: 50 }, { x: 37.2, y: 50 }, { x: 50,   y: 50 }, { x: 62.8, y: 50 }, { x: 75.6, y: 50 },
+
+  // Depth 5 (cy ≈ 53.5%)
+  { x: 18,   y: 53.5 }, { x: 30.8, y: 53.5 }, { x: 43.6, y: 53.5 },
+  { x: 56.4, y: 53.5 }, { x: 69.2, y: 53.5 }, { x: 82,   y: 53.5 },
+
+  // Depth 6 (cy ≈ 57%)
+  { x: 24.4, y: 57 }, { x: 37.2, y: 57 }, { x: 50,   y: 57 }, { x: 62.8, y: 57 }, { x: 75.6, y: 57 },
+
+  // Depth 7 (cy ≈ 60.5%)
+  { x: 18,   y: 60.5 }, { x: 30.8, y: 60.5 }, { x: 43.6, y: 60.5 },
+  { x: 56.4, y: 60.5 }, { x: 69.2, y: 60.5 }, { x: 82,   y: 60.5 },
+
+  // Depth 8 (cy ≈ 64%)
+  { x: 24.4, y: 64 }, { x: 37.2, y: 64 }, { x: 50,   y: 64 }, { x: 62.8, y: 64 }, { x: 75.6, y: 64 },
+
+  // Depth 9 — front row, just above stage (cy ≈ 67.5%)
+  { x: 30.8, y: 67.5 }, { x: 43.6, y: 67.5 }, { x: 56.4, y: 67.5 }, { x: 69.2, y: 67.5 },
 ];
 
 export function HabboRoom({
@@ -40,24 +59,14 @@ export function HabboRoom({
 }: HabboRoomProps) {
   const placements = useMemo(() => {
     return participants.map((username, index) => {
-      let position;
-      if (index === 0) {
-        // First participant is the DJ
-        position = DJ_POSITION;
-      } else {
-        // Rest go to floor tiles in order
-        // FIX: Use modulo so extra participants wrap back to existing tiles
-        // but now we have 30 tiles so most normal groups fit without overlap
-        const floorIndex = (index - 1) % DISCO_FLOOR_GRID.length;
-        position = DISCO_FLOOR_GRID[floorIndex];
-      }
-
+      const tileIndex = index % DISCO_FLOOR_GRID.length;
+      const tile = DISCO_FLOOR_GRID[tileIndex];
       return {
         username,
-        x: position.x,
-        y: position.y,
-        isDJ: index === 0,
-        zIndex: index === 0 ? 900 : 100 + (DISCO_FLOOR_GRID.length - ((index - 1) % DISCO_FLOOR_GRID.length)),
+        x: tile.x,
+        y: tile.y,
+        // Front tiles (higher y) rendered on top of back tiles.
+        zIndex: 100 + Math.round(tile.y),
       };
     });
   }, [participants]);
@@ -106,7 +115,7 @@ export function HabboRoom({
                   left: `${p.x}%`,
                   top: `${p.y}%`,
                   zIndex: p.zIndex,
-                  transform: "translate(-50%, -50%)",
+                  transform: "translate(-50%, -90%)",
                 }}
               >
                 <img

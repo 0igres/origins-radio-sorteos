@@ -1,6 +1,71 @@
 import { Router, type IRouter } from "express";
+import * as net from "net";
 
 const router: IRouter = Router();
+
+const SHOUTCAST_HOST = "s5.myradiostream.com";
+const SHOUTCAST_PORT = 44728;
+
+function fetchShoutcastListeners(): Promise<number> {
+  return new Promise((resolve) => {
+    const client = net.createConnection(
+      { host: SHOUTCAST_HOST, port: SHOUTCAST_PORT },
+      () => {
+        client.write(
+          "GET / HTTP/1.0\r\n" +
+            `Host: ${SHOUTCAST_HOST}:${SHOUTCAST_PORT}\r\n` +
+            "User-Agent: Mozilla/5.0\r\n" +
+            "Connection: close\r\n\r\n"
+        );
+      }
+    );
+
+    let buffer = "";
+    let resolved = false;
+
+    const done = (count: number) => {
+      if (!resolved) {
+        resolved = true;
+        resolve(count);
+        client.destroy();
+      }
+    };
+
+    client.on("data", (chunk) => {
+      buffer += chunk.toString("utf8");
+      if (buffer.length > 8000) client.destroy();
+    });
+
+    client.on("close", () => {
+      let count = 0;
+      const patterns = [
+        /(\d+)\s+(?:of\s+\d+\s+)?(?:unique\s+)?listeners/i,
+        /Current Listeners[^\d]*(\d+)/i,
+        /Listeners[^\d]*(\d+)/i,
+        /<td[^>]*>(\d+)<\/td>/gi,
+      ];
+
+      for (const pat of patterns) {
+        pat.lastIndex = 0;
+        const m = pat.exec(buffer);
+        if (m) {
+          const n = parseInt(m[m.length - 1], 10);
+          if (!isNaN(n) && n >= 0) {
+            count = n;
+            break;
+          }
+        }
+      }
+
+      done(count);
+    });
+
+    client.on("error", () => done(0));
+
+    const timer = setTimeout(() => done(0), 5000);
+    client.on("close", () => clearTimeout(timer));
+  });
+}
 
 router.get("/validate-user/:username", async (req, res) => {
   try {
@@ -27,22 +92,11 @@ router.get("/validate-user/:username", async (req, res) => {
 
 router.get("/listeners", async (_req, res) => {
   try {
-    const response = await fetch("http://s5.myradiostream.com:44728/stats?json=1", {
-      headers: { "User-Agent": "Mozilla/5.0" },
-      signal: AbortSignal.timeout(5000),
-    });
-
-    if (response.ok) {
-      const data = await response.json() as { listeners?: number };
-      return res.json({ listeners: data.listeners || 0 });
-    }
-
-    const defaultListeners = Math.floor(Math.random() * 45) + 5;
-    res.json({ listeners: defaultListeners });
+    const listeners = await fetchShoutcastListeners();
+    res.json({ listeners });
   } catch (err) {
     console.error("Listener count fetch error:", err);
-    const defaultListeners = Math.floor(Math.random() * 45) + 5;
-    res.json({ listeners: defaultListeners });
+    res.json({ listeners: 0 });
   }
 });
 
