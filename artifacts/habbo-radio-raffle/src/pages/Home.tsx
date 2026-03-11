@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { HabboRoom } from "@/components/HabboRoom";
 import { RadioPlayer } from "@/components/RadioPlayer";
+import ogkLogo from "@assets/logo-ogk.png";
 import { useToast } from "@/hooks/use-toast";
 import { motion, AnimatePresence } from "framer-motion";
 import { Trophy, Users, AlertCircle, Play, RotateCcw, Trash2, X } from "lucide-react";
@@ -130,18 +131,18 @@ export default function Home() {
       <div className="max-w-6xl mx-auto flex flex-col gap-6">
         {/* Header */}
         <div className="flex items-center gap-4 p-4 rounded-xl shadow-lg border-4" style={{ backgroundColor: '#1a2a32', borderColor: '#1a2a32' }}>
-          <div className="w-16 h-16 rounded-full flex items-center justify-center border-2 border-black overflow-hidden shadow-inner" style={{ backgroundColor: '#e0e6e8' }}>
+          <div className="w-16 h-16 flex items-center justify-center overflow-hidden shrink-0">
             <img
-              src="https://habboxwiki.com/wiki/images/4/4a/RUBBERDUCK.png"
-              alt="Logo"
-              className="w-10 h-10 pixelated"
+              src={ogkLogo}
+              alt="Radio OGK Logo"
+              className="w-16 h-16 pixelated object-contain"
             />
           </div>
           <div>
             <h1 className="text-2xl sm:text-3xl text-white" style={{ fontFamily: "'Press Start 2P', system-ui", fontSize: '1.1rem', textShadow: '2px 2px 0 rgba(0,0,0,0.5)' }}>
               Radio OGK
             </h1>
-            <p className="text-lg" style={{ color: '#5ba3ce' }}>Generador oficial de sorteos Habbo</p>
+            <p className="text-lg" style={{ color: '#5ba3ce' }}>Radio oficial de Origins Kingdom. ¡Conéctate a la disco para los sorteos!</p>
           </div>
         </div>
 

@@ -53,9 +53,30 @@ export function RadioPlayer({ onPlayingChange }: RadioPlayerProps) {
     }
   }, [volume]);
 
-  const handleRequestSubmit = (e: React.FormEvent) => {
+  const [isSending, setIsSending] = useState(false);
+
+  const handleRequestSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log("Song request:", { name: requestName, song: requestSong });
+    if (isSending) return;
+    setIsSending(true);
+
+    const webhookUrl =
+      "https://discord.com/api/webhooks/1430524848374812802/-vROqJyF57dbLOS4eylAo9gIooYQ7lMlq4bdZZrfRZF6KM3obhngA82P6yzaX1HU2UMU";
+
+    try {
+      await fetch(webhookUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          content: `🎵 **Petición de canción**\n👤 **Usuario:** ${requestName}\n🎶 **Canción:** ${requestSong}`,
+        }),
+      });
+    } catch (err) {
+      console.error("Error sending song request:", err);
+    } finally {
+      setIsSending(false);
+    }
+
     setRequestName("");
     setRequestSong("");
     setShowRequestModal(false);
@@ -203,9 +224,9 @@ export function RadioPlayer({ onPlayingChange }: RadioPlayerProps) {
                   required
                 />
                 <div className="flex gap-2">
-                  <button type="submit" className="habbo-button habbo-button-secondary flex-1 py-2">
+                  <button type="submit" disabled={isSending} className="habbo-button habbo-button-secondary flex-1 py-2">
                     <Send className="w-4 h-4 inline mr-1" />
-                    Enviar
+                    {isSending ? "Enviando..." : "Enviar"}
                   </button>
                   <button
                     type="button"

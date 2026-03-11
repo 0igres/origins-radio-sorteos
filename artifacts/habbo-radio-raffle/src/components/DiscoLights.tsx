@@ -22,7 +22,7 @@ export function DiscoLights({ active }: { active: boolean }) {
   if (!active) return null;
 
   return (
-    <div className="absolute inset-0 pointer-events-none overflow-hidden" style={{ zIndex: 40 }}>
+    <div className="absolute inset-0 pointer-events-none overflow-hidden" style={{ zIndex: 200 }}>
 
       {/* Rotating spotlight beams */}
       {SPOTLIGHTS.map((light, i) => (
