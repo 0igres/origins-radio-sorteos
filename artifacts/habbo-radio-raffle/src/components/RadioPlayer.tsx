@@ -14,7 +14,7 @@ export function RadioPlayer({ onPlayingChange, onServerOnlineChange }: RadioPlay
   const [requestName, setRequestName] = useState("");
   const [requestSong, setRequestSong] = useState("");
   const [listeners, setListeners] = useState(0);
-  const [isServerOnline, setIsServerOnline] = useState(true);
+  const [isServerOnline, setIsServerOnline] = useState(false);
   const [currentSong, setCurrentSong] = useState("");
   const [isSending, setIsSending] = useState(false);
   const audioRef = useRef<HTMLAudioElement>(null);
@@ -128,7 +128,7 @@ export function RadioPlayer({ onPlayingChange, onServerOnlineChange }: RadioPlay
   const statusColor = isServerOnline ? "#ef4444" : "#6b7280";
 
   const statusSubtitle = !isServerOnline
-    ? "Esperando conexión..."
+    ? "La radio está desconectada"
     : isPlaying
     ? (currentSong || "Origins Kingdom Radio")
     : "Reproduce para empezar la diversión";

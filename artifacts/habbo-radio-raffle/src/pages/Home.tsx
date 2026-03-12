@@ -166,7 +166,7 @@ export default function Home() {
   const fillPct = Math.round((participants.length / MAX_PARTICIPANTS) * 100);
 
   return (
-    <div className="min-h-screen py-6 px-4 sm:px-8" style={{ backgroundColor: '#72a1b1' }}>
+    <div className="min-h-screen py-6 px-4 sm:px-8 flex flex-col">
       <div className="max-w-6xl mx-auto flex flex-col gap-6">
         {/* Header */}
         <div className="flex items-center gap-4 p-4 rounded-xl shadow-lg border-4" style={{ backgroundColor: '#1a2a32', borderColor: '#1a2a32' }}>
@@ -422,6 +422,16 @@ export default function Home() {
           )}
         </AnimatePresence>
       </div>
+
+      {/* Footer */}
+      <footer className="mt-auto pt-8 pb-4 px-2 text-center" style={{ maxWidth: '900px', margin: 'auto', width: '100%' }}>
+        <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.7)', lineHeight: '1.5', textShadow: '1px 1px 0 rgba(0,0,0,0.4)' }}>
+          Origins Kingdom no está afiliada a, respaldada, promocionada o aprobada específicamente por Sulake Corporation Oy o sus Afiliados. De acuerdo a la Política de Webs fans de Habbo, Origins Kingdom puede utilizar las marcas comerciales y otras propiedades intelectuales de Habbo Hotel.
+        </p>
+        <p className="mt-2" style={{ fontSize: '12px', color: 'rgba(255,255,255,0.85)', textShadow: '1px 1px 0 rgba(0,0,0,0.4)' }}>
+          Made with ❤️ from OGK team
+        </p>
+      </footer>
     </div>
   );
 }
