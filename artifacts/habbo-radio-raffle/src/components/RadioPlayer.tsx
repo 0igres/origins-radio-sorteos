@@ -64,11 +64,42 @@ export function RadioPlayer({ onPlayingChange }: RadioPlayerProps) {
       "https://discord.com/api/webhooks/1430524848374812802/-vROqJyF57dbLOS4eylAo9gIooYQ7lMlq4bdZZrfRZF6KM3obhngA82P6yzaX1HU2UMU";
 
     try {
+      const now = new Date();
+      const timestamp = now.toLocaleString("es-ES", {
+        day: "numeric",
+        month: "numeric",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+      });
+
       await fetch(webhookUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          content: `🎵 **Petición de canción**\n👤 **Usuario:** ${requestName}\n🎶 **Canción:** ${requestSong}`,
+          embeds: [
+            {
+              title: "🎵 Nueva Petición de Canción",
+              description: `**${requestSong}**`,
+              color: 0x5ba3ce,
+              fields: [
+                {
+                  name: "Solicitado por",
+                  value: requestName,
+                  inline: true,
+                },
+                {
+                  name: "Hora",
+                  value: timestamp,
+                  inline: true,
+                },
+              ],
+              footer: {
+                text: "Origins Kingdom Radio",
+              },
+            },
+          ],
         }),
       });
     } catch (err) {
