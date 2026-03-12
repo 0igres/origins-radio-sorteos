@@ -1,46 +1,69 @@
 import { useState, useRef, useEffect } from "react";
-import { Music, Play, Pause, Send, X } from "lucide-react";
+import { Music, Play, Pause, Send, X, WifiOff } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 interface RadioPlayerProps {
   onPlayingChange?: (isPlaying: boolean) => void;
+  onServerOnlineChange?: (online: boolean) => void;
 }
 
-export function RadioPlayer({ onPlayingChange }: RadioPlayerProps) {
+export function RadioPlayer({ onPlayingChange, onServerOnlineChange }: RadioPlayerProps) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [volume, setVolume] = useState(75);
   const [showRequestModal, setShowRequestModal] = useState(false);
   const [requestName, setRequestName] = useState("");
   const [requestSong, setRequestSong] = useState("");
   const [listeners, setListeners] = useState(0);
+  const [isServerOnline, setIsServerOnline] = useState(true);
+  const [currentSong, setCurrentSong] = useState("");
+  const [isSending, setIsSending] = useState(false);
   const audioRef = useRef<HTMLAudioElement>(null);
+  const isPlayingRef = useRef(isPlaying);
+  isPlayingRef.current = isPlaying;
+
+  const updateServerStatus = async () => {
+    try {
+      const res = await fetch("/api/radio-status");
+      if (res.ok) {
+        const data = await res.json() as { online: boolean; listeners: number; currentSong: string };
+        setIsServerOnline(data.online);
+        setListeners(data.listeners);
+        setCurrentSong(data.currentSong ?? "");
+        onServerOnlineChange?.(data.online);
+
+        if (!data.online && isPlayingRef.current) {
+          setIsPlaying(false);
+          onPlayingChange?.(false);
+          audioRef.current?.pause();
+        }
+      }
+    } catch {
+      setIsServerOnline(false);
+      onServerOnlineChange?.(false);
+    }
+  };
 
   useEffect(() => {
-    const fetchListeners = async () => {
-      try {
-        const response = await fetch("/api/listeners");
-        if (response.ok) {
-          const data = await response.json();
-          setListeners(data.listeners || 0);
-        }
-      } catch (error) {
-        console.error("Failed to fetch listener count:", error);
-      }
-    };
-
-    fetchListeners();
-    const interval = setInterval(fetchListeners, 30000);
+    updateServerStatus();
+    const interval = setInterval(updateServerStatus, 30000);
     return () => clearInterval(interval);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handlePlayPause = () => {
+  const handlePlayPause = async () => {
+    if (!isPlaying) {
+      await updateServerStatus();
+      if (!isServerOnline) return;
+    }
+
     const newState = !isPlaying;
     setIsPlaying(newState);
     onPlayingChange?.(newState);
 
     if (newState) {
-      audioRef.current?.play().catch((err) => {
-        console.error("Failed to play audio:", err);
+      audioRef.current?.play().catch(() => {
+        setIsPlaying(false);
+        onPlayingChange?.(false);
       });
     } else {
       audioRef.current?.pause();
@@ -52,8 +75,6 @@ export function RadioPlayer({ onPlayingChange }: RadioPlayerProps) {
       audioRef.current.volume = volume / 100;
     }
   }, [volume]);
-
-  const [isSending, setIsSending] = useState(false);
 
   const handleRequestSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -84,20 +105,10 @@ export function RadioPlayer({ onPlayingChange }: RadioPlayerProps) {
               description: `**${requestSong}**`,
               color: 0x5ba3ce,
               fields: [
-                {
-                  name: "Solicitado por",
-                  value: requestName,
-                  inline: true,
-                },
-                {
-                  name: "Hora",
-                  value: timestamp,
-                  inline: true,
-                },
+                { name: "Solicitado por", value: requestName, inline: true },
+                { name: "Hora", value: timestamp, inline: true },
               ],
-              footer: {
-                text: "Origins Kingdom Radio",
-              },
+              footer: { text: "Origins Kingdom Radio" },
             },
           ],
         }),
@@ -113,70 +124,76 @@ export function RadioPlayer({ onPlayingChange }: RadioPlayerProps) {
     setShowRequestModal(false);
   };
 
+  const statusLabel = isServerOnline ? "EN VIVO" : "DESCONECTADO";
+  const statusColor = isServerOnline ? "#ef4444" : "#6b7280";
+
+  const statusSubtitle = !isServerOnline
+    ? "Esperando conexión..."
+    : isPlaying
+    ? (currentSong || "Origins Kingdom Radio")
+    : "Reproduce para empezar la diversión";
+
   return (
     <div className="habbo-panel flex flex-col gap-4 p-4 w-full">
-      <div className="flex items-center gap-3 border-b-2 border-gray-400 pb-3">
-        <Music className="w-6 h-6" />
+      <div className="habbo-panel-title">
+        <Music className="w-5 h-5 shrink-0" />
         <div>
-          <h2 className="text-xl font-bold" style={{ fontFamily: "'Press Start 2P', system-ui", fontSize: '0.75rem' }}>Origins Kingdom Radio</h2>
-          <p className="text-sm text-gray-600">DJ Colorinsiyo</p>
+          <h2 style={{ fontFamily: "'Press Start 2P', system-ui", fontSize: '0.65rem', color: 'white' }}>Origins Kingdom Radio</h2>
+          <p style={{ fontSize: '13px', color: '#a8d4ea', marginTop: '2px' }}>DJ Colorinsiyo</p>
         </div>
       </div>
 
       <div className="bg-gray-900 rounded-lg p-4">
         <div className="flex items-center gap-3 mb-2">
-          {isPlaying && (
+          {isServerOnline ? (
             <motion.div
-              animate={{ scale: [1, 1.2, 1] }}
-              transition={{ duration: 0.6, repeat: Infinity }}
-              className="w-2 h-2 bg-red-600 rounded-full"
+              animate={{ scale: [1, 1.3, 1] }}
+              transition={{ duration: 0.8, repeat: Infinity }}
+              className="w-2 h-2 rounded-full"
+              style={{ backgroundColor: statusColor }}
             />
+          ) : (
+            <WifiOff className="w-3 h-3" style={{ color: statusColor }} />
           )}
-          <span className="text-red-600 font-bold text-sm">
-            {isPlaying ? "EN VIVO" : "DESCONECTADO"}
+          <span className="font-bold text-sm" style={{ color: statusColor }}>
+            {statusLabel}
           </span>
         </div>
         <p className="text-white text-sm font-bold">Origins Kingdom Radio</p>
-        <p className="text-gray-400 text-xs mt-1">
-          {isPlaying
-            ? `▶ Play'EM Sessions #85 ▶ Latin Hous... • ${listeners} oyentes`
-            : "Esperando conexión..."}
+        <p className="text-xs mt-1 truncate" style={{ color: isPlaying && currentSong ? '#5ba3ce' : '#9ca3af' }}>
+          {statusSubtitle}
         </p>
 
         <div className="flex justify-center gap-1 mt-3 h-6">
           {[...Array(12)].map((_, i) => (
             <motion.div
               key={i}
-              animate={
-                isPlaying
-                  ? { height: [6, 16, 10, 20, 12] }
-                  : { height: 6 }
-              }
-              transition={{
-                duration: 0.4,
-                repeat: isPlaying ? Infinity : 0,
-                delay: i * 0.04,
-              }}
-              className="w-1 bg-cyan-500 rounded-sm"
+              animate={isPlaying ? { height: [6, 16, 10, 20, 12] } : { height: 6 }}
+              transition={{ duration: 0.4, repeat: isPlaying ? Infinity : 0, delay: i * 0.04 }}
+              className="w-1 rounded-sm"
+              style={{ backgroundColor: isServerOnline ? '#06b6d4' : '#6b7280' }}
             />
           ))}
         </div>
       </div>
 
+      {!isServerOnline && (
+        <div className="flex items-center gap-2 p-2 rounded border text-xs font-bold" style={{ backgroundColor: '#fef2f2', borderColor: '#fecaca', color: '#991b1b' }}>
+          <WifiOff className="w-4 h-4 shrink-0" />
+          Servidor desconectado. La radio no está disponible en este momento.
+        </div>
+      )}
+
       <button
         onClick={handlePlayPause}
+        disabled={!isServerOnline && !isPlaying}
         className="habbo-button habbo-button-secondary w-full py-3 flex items-center justify-center gap-2"
+        style={!isServerOnline ? { opacity: 0.5, cursor: 'not-allowed' } : {}}
       >
         {isPlaying ? (
-          <>
-            <Pause className="w-5 h-5 fill-current" />
-            PAUSA
-          </>
+          <><Pause className="w-5 h-5 fill-current" />PAUSA</>
         ) : (
-          <>
-            <Play className="w-5 h-5 fill-current" />
-            REPRODUCIR
-          </>
+          <><Play className="w-5 h-5 fill-current" />REPRODUCIR</>
         )}
       </button>
 
@@ -199,7 +216,9 @@ export function RadioPlayer({ onPlayingChange }: RadioPlayerProps) {
 
       <button
         onClick={() => setShowRequestModal(true)}
+        disabled={!isServerOnline}
         className="habbo-button habbo-button-secondary w-full py-3 flex items-center justify-center gap-2"
+        style={!isServerOnline ? { opacity: 0.5, cursor: 'not-allowed' } : {}}
       >
         <Music className="w-5 h-5" />
         PIDE TU CANCIÓN
@@ -209,8 +228,8 @@ export function RadioPlayer({ onPlayingChange }: RadioPlayerProps) {
         ref={audioRef}
         src="https://s5.myradiostream.com/44728/listen.mp3"
         crossOrigin="anonymous"
-        onEnded={() => setIsPlaying(false)}
-        onError={() => setIsPlaying(false)}
+        onEnded={() => { setIsPlaying(false); onPlayingChange?.(false); }}
+        onError={() => { setIsPlaying(false); onPlayingChange?.(false); }}
       />
 
       <AnimatePresence>

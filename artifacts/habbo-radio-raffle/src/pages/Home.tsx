@@ -1,11 +1,14 @@
 import { useState, useEffect, useRef } from "react";
 import { HabboRoom } from "@/components/HabboRoom";
 import { RadioPlayer } from "@/components/RadioPlayer";
+import { GamesSection } from "@/components/GamesSection";
 import ogkLogo from "@assets/logo-ogk.png";
 import { useToast } from "@/hooks/use-toast";
 import { motion, AnimatePresence } from "framer-motion";
-import { Trophy, Users, AlertCircle, Play, RotateCcw, Trash2, X } from "lucide-react";
+import { Users, AlertCircle, Play, RotateCcw, Trash2, X, WifiOff } from "lucide-react";
 import confetti from "canvas-confetti";
+
+const MAX_PARTICIPANTS = 100;
 
 export default function Home() {
   const [participants, setParticipants] = useState<string[]>([]);
@@ -14,24 +17,69 @@ export default function Home() {
   const [countdown, setCountdown] = useState(5);
   const [winner, setWinner] = useState<string | null>(null);
   const [isRadioPlaying, setIsRadioPlaying] = useState(false);
+  const [isRadioOnline, setIsRadioOnline] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
-  // FIX #1: Track when we're in the middle of validating to prevent multiple submissions
   const [isValidating, setIsValidating] = useState(false);
+  const prevWinnerRef = useRef<string | null>(null);
   const { toast } = useToast();
+
+  // Subscribe to real-time room + raffle state via SSE
+  useEffect(() => {
+    const es = new EventSource("/api/room/events");
+
+    es.onmessage = (e) => {
+      try {
+        const data = JSON.parse(e.data) as {
+          participants: string[];
+          raffle: { isRaffling: boolean; countdown: number; winner: string | null };
+        };
+
+        setParticipants(data.participants);
+
+        if (data.raffle) {
+          setIsRaffling(data.raffle.isRaffling);
+          setCountdown(data.raffle.countdown);
+          setWinner(data.raffle.winner);
+
+          // Fire confetti exactly once when a winner is announced
+          if (data.raffle.winner && prevWinnerRef.current !== data.raffle.winner) {
+            confetti({
+              particleCount: 100,
+              spread: 70,
+              origin: { y: 0.6 },
+              colors: ["#f28900", "#438eba", "#ffffff"],
+            });
+            toast({
+              title: "¡Ganador registrado!",
+              description: `¡${data.raffle.winner} ganó el sorteo!`,
+            });
+          }
+
+          prevWinnerRef.current = data.raffle.winner;
+        }
+      } catch {
+        // ignore malformed messages
+      }
+    };
+
+    es.onerror = () => {
+      console.error("SSE connection lost, retrying...");
+    };
+
+    return () => es.close();
+  }, [toast]);
 
   const handleAddParticipant = async (e: React.FormEvent) => {
     e.preventDefault();
     const name = inputValue.trim();
 
     if (!name) return;
-
-    // FIX #1: If already validating, ignore additional button clicks
     if (isValidating) return;
 
-    if (participants.some((p) => p.toLowerCase() === name.toLowerCase())) {
+    if (participants.length >= MAX_PARTICIPANTS) {
       toast({
-        title: "¡Ups!",
-        description: "Este Habbo ya está en la sala.",
+        title: "¡Sala llena!",
+        description: `La sala ya tiene ${MAX_PARTICIPANTS} participantes.`,
         variant: "destructive",
       });
       return;
@@ -40,9 +88,9 @@ export default function Home() {
     setIsValidating(true);
 
     try {
-      const response = await fetch(`/api/validate-user/${encodeURIComponent(name)}`);
-      const data = await response.json();
-      if (!data.valid) {
+      const validateRes = await fetch(`/api/validate-user/${encodeURIComponent(name)}`);
+      const validateData = await validateRes.json();
+      if (!validateData.valid) {
         toast({
           title: "Usuario no encontrado",
           description: `${name} no está registrado en Habbo Origins ES.`,
@@ -50,81 +98,72 @@ export default function Home() {
         });
         return;
       }
+
+      const addRes = await fetch("/api/room/add", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username: name }),
+      });
+      const addData = await addRes.json() as { error?: string };
+
+      if (!addRes.ok) {
+        toast({
+          title: "¡Ups!",
+          description: addData.error ?? "No se pudo añadir el usuario.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      setInputValue("");
+      setShowAddModal(false);
     } catch (error) {
-      console.error("Error validating username:", error);
+      console.error("Error adding participant:", error);
       toast({
-        title: "Error al validar",
-        description: "No se pudo validar el usuario.",
+        title: "Error",
+        description: "No se pudo conectar con el servidor.",
         variant: "destructive",
       });
-      return;
     } finally {
       setIsValidating(false);
     }
+  };
 
-    // FIX #1: Re-check for duplicates after async validation completes
-    // (in case the user was added from another quick submission while validating)
-    setParticipants((prev) => {
-      if (prev.some((p) => p.toLowerCase() === name.toLowerCase())) {
-        return prev;
+  const removeParticipant = async (username: string) => {
+    try {
+      await fetch(`/api/room/remove/${encodeURIComponent(username)}`, { method: "DELETE" });
+    } catch (error) {
+      console.error("Error removing participant:", error);
+    }
+  };
+
+  const startRaffle = async () => {
+    try {
+      const res = await fetch("/api/room/raffle/start", { method: "POST" });
+      const data = await res.json() as { error?: string };
+      if (!res.ok) {
+        toast({
+          title: "¡Ups!",
+          description: data.error ?? "No se pudo iniciar el sorteo.",
+          variant: "destructive",
+        });
       }
-      return [...prev, name];
-    });
-    setInputValue("");
-    setWinner(null);
-    setShowAddModal(false);
-  };
-
-  const startRaffle = () => {
-    if (participants.length < 2) {
-      toast({
-        title: "¡Necesitas más Habbos!",
-        description: "Añade al menos 2 participantes para iniciar el sorteo.",
-        variant: "destructive",
-      });
-      return;
+    } catch (error) {
+      console.error("Error starting raffle:", error);
     }
-
-    setIsRaffling(true);
-    setWinner(null);
-    setCountdown(5);
   };
 
-  const resetRaffle = () => {
-    setParticipants([]);
-    setWinner(null);
-    setIsRaffling(false);
-    setCountdown(5);
-  };
-
-  useEffect(() => {
-    let timer: ReturnType<typeof setInterval>;
-    if (isRaffling && countdown > 0) {
-      timer = setInterval(() => {
-        setCountdown((prev) => prev - 1);
-      }, 1000);
-    } else if (isRaffling && countdown === 0) {
-      setIsRaffling(false);
-
-      const winningIndex = Math.floor(Math.random() * participants.length);
-      const winningUser = participants[winningIndex];
-      setWinner(winningUser);
-
-      confetti({
-        particleCount: 100,
-        spread: 70,
-        origin: { y: 0.6 },
-        colors: ["#f28900", "#438eba", "#ffffff"],
-      });
-
-      toast({
-        title: "¡Ganador registrado!",
-        description: `¡${winningUser} ganó el sorteo!`,
-      });
+  const resetRaffle = async () => {
+    try {
+      await fetch("/api/room/reset", { method: "DELETE" });
+    } catch (error) {
+      console.error("Error resetting room:", error);
     }
+  };
 
-    return () => clearInterval(timer);
-  }, [isRaffling, countdown, participants, toast]);
+  const isFull = participants.length >= MAX_PARTICIPANTS;
+  const canAddUsers = isRadioOnline && !isFull && !isRaffling;
+  const fillPct = Math.round((participants.length / MAX_PARTICIPANTS) * 100);
 
   return (
     <div className="min-h-screen py-6 px-4 sm:px-8" style={{ backgroundColor: '#72a1b1' }}>
@@ -132,11 +171,7 @@ export default function Home() {
         {/* Header */}
         <div className="flex items-center gap-4 p-4 rounded-xl shadow-lg border-4" style={{ backgroundColor: '#1a2a32', borderColor: '#1a2a32' }}>
           <div className="w-16 h-16 flex items-center justify-center overflow-hidden shrink-0">
-            <img
-              src={ogkLogo}
-              alt="Radio OGK Logo"
-              className="w-16 h-16 pixelated object-contain"
-            />
+            <img src={ogkLogo} alt="Radio OGK Logo" className="w-16 h-16 pixelated object-contain" />
           </div>
           <div>
             <h1 className="text-2xl sm:text-3xl text-white" style={{ fontFamily: "'Press Start 2P', system-ui", fontSize: '1.1rem', textShadow: '2px 2px 0 rgba(0,0,0,0.5)' }}>
@@ -183,7 +218,7 @@ export default function Home() {
                     animate={{ scale: 1, opacity: 1 }}
                     exit={{ scale: 1.5, opacity: 0 }}
                     className="absolute inset-0 flex items-center justify-center pointer-events-none"
-                    style={{ zIndex: 200 }}
+                    style={{ zIndex: 300 }}
                   >
                     <div className="text-white" style={{ fontSize: '7rem', fontFamily: "'Press Start 2P', system-ui", textShadow: '0 10px 0 rgba(0,0,0,0.5)' }}>
                       {countdown}
@@ -195,10 +230,17 @@ export default function Home() {
 
             {/* Buttons Row */}
             <div className="flex gap-2 justify-center">
+              {!isRadioOnline && (
+                <div className="flex items-center gap-1 px-2 py-1 rounded text-xs font-bold" style={{ backgroundColor: '#fef2f2', color: '#991b1b', border: '1px solid #fecaca' }}>
+                  <WifiOff className="w-3 h-3" />
+                  Radio offline
+                </div>
+              )}
               <button
                 onClick={() => setShowAddModal(true)}
-                disabled={isRaffling}
+                disabled={!canAddUsers}
                 className="habbo-button habbo-button-secondary px-8 py-3 flex items-center justify-center gap-2"
+                title={!isRadioOnline ? "Radio offline — no se pueden añadir participantes" : isFull ? `Sala llena (${MAX_PARTICIPANTS} máx.)` : undefined}
               >
                 <Users className="w-5 h-5" />
                 Agregar keko
@@ -210,7 +252,7 @@ export default function Home() {
                 className="habbo-button habbo-button-secondary flex-1 flex items-center justify-center gap-2 py-3"
               >
                 <Play className="w-5 h-5 fill-current" />
-                INICIAR SORTEO
+                {isRaffling ? `SORTEANDO... ${countdown}` : "INICIAR SORTEO"}
               </button>
 
               <button
@@ -227,15 +269,13 @@ export default function Home() {
 
           {/* Middle: Participants */}
           <div className="w-full lg:w-64 shrink-0" style={{ height: '450px' }}>
-            <div className="habbo-panel flex flex-col p-4 gap-4 h-full">
-              <div className="flex items-center justify-between border-b-2 border-gray-400 pb-2 mb-2">
-                <h2 className="text-2xl font-bold flex items-center gap-2">
-                  <Users className="w-6 h-6" />
-                  :chooser
-                </h2>
+            <div className="habbo-panel flex flex-col p-4 gap-2 h-full">
+              <div className="habbo-panel-title">
+                <Users className="w-4 h-4 shrink-0" />
+                <h2 style={{ fontFamily: "'Press Start 2P', system-ui", fontSize: '0.6rem', color: 'white' }}>:chooser</h2>
               </div>
 
-              <div className="bg-white border-2 border-black flex-1 overflow-y-auto p-3 shadow-inner" style={{ minHeight: 0 }}>
+              <div className="habbo-panel-inner flex-1 overflow-y-auto p-3 shadow-inner" style={{ minHeight: 0 }}>
                 {participants.length === 0 ? (
                   <div className="h-full flex flex-col items-center justify-center text-gray-400 gap-2 opacity-50">
                     <AlertCircle className="w-10 h-10" />
@@ -264,7 +304,7 @@ export default function Home() {
                           </span>
                         </div>
                         <button
-                          onClick={() => setParticipants((prev) => prev.filter((x) => x !== username))}
+                          onClick={() => removeParticipant(username)}
                           className="text-red-500 hover:text-red-700 shrink-0 transition-opacity"
                           style={{ opacity: 0 }}
                           onMouseEnter={(e) => (e.currentTarget.style.opacity = '1')}
@@ -277,14 +317,38 @@ export default function Home() {
                   </ul>
                 )}
               </div>
+
+              {/* Capacity bar */}
+              <div className="pt-1">
+                <div className="flex justify-between items-center mb-1">
+                  <span className="text-xs text-gray-500">Participantes</span>
+                  <span
+                    className="text-xs font-bold"
+                    style={{ color: isFull ? '#b91c1c' : '#1d4ed8' }}
+                  >
+                    {participants.length}/{MAX_PARTICIPANTS}
+                  </span>
+                </div>
+                <div className="w-full h-2 rounded-full overflow-hidden border border-gray-300" style={{ backgroundColor: '#e5e7eb' }}>
+                  <motion.div
+                    className="h-full rounded-full"
+                    style={{ backgroundColor: isFull ? '#ef4444' : '#3b82f6' }}
+                    animate={{ width: `${fillPct}%` }}
+                    transition={{ type: "spring", stiffness: 120, damping: 20 }}
+                  />
+                </div>
+              </div>
             </div>
           </div>
 
           {/* Right: Radio */}
           <div className="w-full lg:w-80 shrink-0">
-            <RadioPlayer onPlayingChange={setIsRadioPlaying} />
+            <RadioPlayer onPlayingChange={setIsRadioPlaying} onServerOnlineChange={setIsRadioOnline} />
           </div>
         </div>
+
+        {/* Juegos Guiados */}
+        <GamesSection />
 
         {/* Add User Modal */}
         <AnimatePresence>
@@ -314,6 +378,17 @@ export default function Home() {
                   </button>
                 </div>
 
+                {!isRadioOnline && (
+                  <div className="mb-3 p-2 rounded text-sm text-center font-bold flex items-center justify-center gap-2" style={{ backgroundColor: '#fef2f2', color: '#991b1b' }}>
+                    <WifiOff className="w-4 h-4" /> Radio offline. No se pueden añadir participantes.
+                  </div>
+                )}
+                {isFull && isRadioOnline && (
+                  <div className="mb-3 p-2 rounded text-sm text-center font-bold" style={{ backgroundColor: '#fee2e2', color: '#b91c1c' }}>
+                    ¡Sala llena! Máximo {MAX_PARTICIPANTS} participantes.
+                  </div>
+                )}
+
                 <form onSubmit={handleAddParticipant} className="flex flex-col gap-3">
                   <input
                     type="text"
@@ -322,13 +397,13 @@ export default function Home() {
                     onChange={(e) => setInputValue(e.target.value)}
                     className="habbo-input"
                     autoFocus
+                    disabled={!canAddUsers}
                   />
                   <div className="flex gap-2">
-                    {/* FIX #1: Disable button while validating to prevent repeated clicks */}
                     <button
                       type="submit"
                       className="habbo-button habbo-button-secondary flex-1 py-2"
-                      disabled={!inputValue.trim() || isValidating}
+                      disabled={!inputValue.trim() || isValidating || !canAddUsers}
                     >
                       {isValidating ? "Validando..." : "Añadir"}
                     </button>

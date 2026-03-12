@@ -6,13 +6,19 @@ const router: IRouter = Router();
 const SHOUTCAST_HOST = "s5.myradiostream.com";
 const SHOUTCAST_PORT = 44728;
 
-function fetchShoutcastListeners(): Promise<number> {
+interface RadioStatus {
+  online: boolean;
+  listeners: number;
+  currentSong: string;
+}
+
+function fetchRadioStatus(): Promise<RadioStatus> {
   return new Promise((resolve) => {
     const client = net.createConnection(
       { host: SHOUTCAST_HOST, port: SHOUTCAST_PORT },
       () => {
         client.write(
-          "GET / HTTP/1.0\r\n" +
+          "GET /7.html HTTP/1.0\r\n" +
             `Host: ${SHOUTCAST_HOST}:${SHOUTCAST_PORT}\r\n` +
             "User-Agent: Mozilla/5.0\r\n" +
             "Connection: close\r\n\r\n"
@@ -23,48 +29,56 @@ function fetchShoutcastListeners(): Promise<number> {
     let buffer = "";
     let resolved = false;
 
-    const done = (count: number) => {
+    const done = (status: RadioStatus) => {
       if (!resolved) {
         resolved = true;
-        resolve(count);
+        resolve(status);
         client.destroy();
       }
     };
 
     client.on("data", (chunk) => {
       buffer += chunk.toString("utf8");
-      if (buffer.length > 8000) client.destroy();
+      if (buffer.length > 4000) client.destroy();
     });
 
     client.on("close", () => {
-      let count = 0;
-      const patterns = [
-        /(\d+)\s+(?:of\s+\d+\s+)?(?:unique\s+)?listeners/i,
-        /Current Listeners[^\d]*(\d+)/i,
-        /Listeners[^\d]*(\d+)/i,
-        /<td[^>]*>(\d+)<\/td>/gi,
-      ];
-
-      for (const pat of patterns) {
-        pat.lastIndex = 0;
-        const m = pat.exec(buffer);
-        if (m) {
-          const n = parseInt(m[m.length - 1], 10);
-          if (!isNaN(n) && n >= 0) {
-            count = n;
-            break;
-          }
-        }
+      if (!buffer.length) {
+        return done({ online: false, listeners: 0, currentSong: "" });
       }
 
-      done(count);
+      // Must be HTTP 200 to be considered online
+      const isHttp200 = /HTTP\/1\.\d\s+200/i.test(buffer);
+      if (!isHttp200) {
+        return done({ online: false, listeners: 0, currentSong: "" });
+      }
+
+      // /7.html body format: currentListeners,peakListeners,maxListeners,reportedListeners,?,bitrate,songtitle
+      const bodyMatch = /<body>([^<]+)<\/body>/i.exec(buffer);
+      if (!bodyMatch) {
+        return done({ online: false, listeners: 0, currentSong: "" });
+      }
+
+      const parts = bodyMatch[1].split(",");
+      if (parts.length < 7) {
+        return done({ online: false, listeners: 0, currentSong: "" });
+      }
+
+      const listeners = parseInt(parts[0], 10) || 0;
+      const currentSong = parts.slice(6).join(",").trim();
+
+      done({ online: true, listeners, currentSong });
     });
 
-    client.on("error", () => done(0));
+    client.on("error", () => done({ online: false, listeners: 0, currentSong: "" }));
 
-    const timer = setTimeout(() => done(0), 5000);
+    const timer = setTimeout(() => done({ online: false, listeners: 0, currentSong: "" }), 5000);
     client.on("close", () => clearTimeout(timer));
   });
+}
+
+function fetchShoutcastListeners(): Promise<number> {
+  return fetchRadioStatus().then((s) => s.listeners);
 }
 
 router.get("/validate-user/:username", async (req, res) => {
@@ -97,6 +111,16 @@ router.get("/listeners", async (_req, res) => {
   } catch (err) {
     console.error("Listener count fetch error:", err);
     res.json({ listeners: 0 });
+  }
+});
+
+router.get("/radio-status", async (_req, res) => {
+  try {
+    const status = await fetchRadioStatus();
+    res.json(status);
+  } catch (err) {
+    console.error("Radio status check error:", err);
+    res.json({ online: false, listeners: 0 });
   }
 });
 

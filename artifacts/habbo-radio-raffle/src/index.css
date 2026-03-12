@@ -33,9 +33,35 @@
   }
 
   .habbo-panel {
-    background-color: #e0e6e8;
-    border: 2px solid black;
-    box-shadow: inset 2px 2px 0px 0px rgba(255,255,255,1), inset -2px -2px 0px 0px rgba(0,0,0,0.2);
+    background-color: #dce8ec;
+    border: 5px solid #5b8fa8;
+    border-radius: 8px;
+    box-shadow:
+      inset 2px 2px 0 rgba(255,255,255,0.7),
+      inset -2px -2px 0 rgba(0,0,0,0.12),
+      2px 4px 8px rgba(0,0,0,0.18);
+  }
+
+  .habbo-panel-title {
+    background-color: #2e6b8a;
+    background-image: radial-gradient(circle, rgba(255,255,255,0.18) 1px, transparent 1px);
+    background-size: 4px 4px;
+    color: white;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    /* extends to the edges of p-4 (16px) parent padding */
+    margin: -16px -16px 16px -16px;
+    padding: 7px 14px;
+    border-radius: 3px 3px 0 0;
+    border-bottom: 2px solid #1a4a60;
+    text-shadow: 1px 1px 0 rgba(0,0,0,0.5);
+  }
+
+  .habbo-panel-inner {
+    background-color: white;
+    border: 2px solid #6b9cb8;
+    border-radius: 2px;
   }
 
   .habbo-button {
