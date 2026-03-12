@@ -79,7 +79,7 @@ export function HabboRoom({
           width: "100%",
           maxWidth: "600px",
           aspectRatio: "4 / 3",
-          backgroundColor: "#008080",
+          backgroundColor: "#1a2a32",
         }}
       >
         {/* Background Room */}

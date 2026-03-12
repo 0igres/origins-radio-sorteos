@@ -424,13 +424,15 @@ export default function Home() {
       </div>
 
       {/* Footer */}
-      <footer className="mt-auto pt-8 pb-4 px-2 text-center" style={{ maxWidth: '900px', margin: 'auto', width: '100%' }}>
-        <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.7)', lineHeight: '1.5', textShadow: '1px 1px 0 rgba(0,0,0,0.4)' }}>
-          Origins Kingdom no está afiliada a, respaldada, promocionada o aprobada específicamente por Sulake Corporation Oy o sus Afiliados. De acuerdo a la Política de Webs fans de Habbo, Origins Kingdom puede utilizar las marcas comerciales y otras propiedades intelectuales de Habbo Hotel.
-        </p>
-        <p className="mt-2" style={{ fontSize: '12px', color: 'rgba(255,255,255,0.85)', textShadow: '1px 1px 0 rgba(0,0,0,0.4)' }}>
-          Made with ❤️ from OGK team
-        </p>
+      <footer className="mt-8 mb-4 max-w-6xl w-full mx-auto">
+        <div className="flex flex-col items-center gap-2 p-4 rounded-xl shadow-lg border-4 text-center" style={{ backgroundColor: '#1a2a32', borderColor: '#1a2a32' }}>
+          <p style={{ fontSize: '11px', color: '#a8d4ea', lineHeight: '1.6' }}>
+            Origins Kingdom no está afiliada a, respaldada, promocionada o aprobada específicamente por Sulake Corporation Oy o sus Afiliados. De acuerdo a la Política de Webs fans de Habbo, Origins Kingdom puede utilizar las marcas comerciales y otras propiedades intelectuales de Habbo Hotel.
+          </p>
+          <p style={{ fontSize: '11px', color: '#a8d4ea', lineHeight: '1.6' }}>
+            Made with ❤️ from OGK team
+          </p>
+        </div>
       </footer>
     </div>
   );
